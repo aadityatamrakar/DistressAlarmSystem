@@ -1,0 +1,134 @@
+<html>
+
+<head>
+  <title>DAS</title>
+</head>
+
+<body>
+  <h3 id="room"></h3>
+  <span id="controller"></span>
+  Remote<br /><img id="play" width="160" height="120"></img><br>
+  Self<br /><video id="video" width="160" height="120" autoplay></video>
+  <canvas style="display:none;" id="canvas" width="160" height="120"></canvas>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/RecordRTC/5.5.0/RecordRTC.min.js"></script> -->
+  <script>
+    var video = document.getElementById("video");
+    var play = document.getElementById("play");
+    var canvas = document.getElementById("canvas");
+    var controller = document.getElementById("controller");
+    var context = canvas.getContext('2d');
+
+    function getQueryStringValue(key) {
+      return decodeURIComponent(window.location.search.replace(new RegExp("^(?:.*[&\\?]" + encodeURIComponent(key).replace(
+        /[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
+    }
+
+    document.getElementById('room').innerText = getQueryStringValue('type');
+    if(getQueryStringValue('type') != 'controller') {
+      let b = '<button onclick="distress()">distress</button>';
+      document.getElementById('room').innerHTML += b;
+    }
+
+    const socket = io('http://' + window.location.host.replace(':3000', '') + ':3001');
+    socket.on('connect', () => {
+      console.log("Connected " + socket.connected); // true
+      if (getQueryStringValue('type') != 'undefined') {
+        console.log('registering ', getQueryStringValue('type'));
+        socket.emit('register', getQueryStringValue('type'));
+      }
+    });
+
+    socket.on('message', function (evt) {
+      console.log(evt);
+
+      if (evt == 'startVideoStream') {
+        sendVideo();
+      }
+      if (evt == 'stopVideoStream') {
+        stopVideo();
+      }
+    });
+
+    socket.on('controller', function (evt) {
+      console.log(evt);
+      let rid = Math.floor(Math.random() * 1000);
+      btn = '<button id="button' + rid + '" onclick="javascript:signal(\'' + evt.trim() +
+        '\', true), document.querySelector(\'#button' + rid + '\').remove();">' + evt + ' - on</button>';
+      controller.innerHTML += btn;
+    });
+
+    socket.on('stream', function (image) {
+      play.src = image;
+      console.log('recieving...')
+      debounce(() => {
+        console.log('clear');
+        play.src = '';
+      }, 250);
+    });
+
+    let intervalId = 0;
+
+    function sendVideo() {
+      intervalId = setInterval(function () {
+        context.drawImage(video, 0, 0, 160, 120);
+        socket.emit('stream', canvas.toDataURL('image/png'));
+      }, 50);
+    }
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.getUserMedia({
+        video: true,
+        audio: false
+      }, loadCam, loadFail)
+
+      function loadCam(stream) {
+        video.srcObject = stream;
+        video.play();
+        console.log("Cam is ok")
+      }
+
+      function loadFail() {
+        console.log('not ok')
+      }
+    }
+
+    function stopVideo() {
+      clearInterval(intervalId);
+    }
+
+    function signal(id, todo) {
+      if(todo) {
+        sendVideo();
+      }
+      console.log(id, todo);
+      socket.emit('signal', id, todo);
+      let rid = Math.floor(Math.random() * 1000);
+      btn = '<button id="button' + rid + '" onclick="javascript:signal(\'' + id.trim() +
+        '\', false), document.querySelector(\'#button' + rid + '\').remove();">' + id + ' - off</button>';
+      controller.innerHTML += btn;
+    }
+    function distress() {
+      socket.emit('message', 'distress');
+    }
+
+    function debounce(func, wait, immediate) {
+      var timeout;
+      return function () {
+        var context = this,
+          args = arguments;
+        var later = function () {
+          timeout = null;
+          if (!immediate) func.apply(context, args);
+        };
+        var callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        if (callNow) func.apply(context, args);
+      };
+    };
+
+  </script>
+</body>
+
+</html>

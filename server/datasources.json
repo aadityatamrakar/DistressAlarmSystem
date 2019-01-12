@@ -1,0 +1,12 @@
+{
+  "db": {
+    "host": "",
+    "port": 0,
+    "url": "",
+    "database": "webrtc",
+    "password": "",
+    "name": "db",
+    "user": "",
+    "connector": "mongodb"
+  }
+}
